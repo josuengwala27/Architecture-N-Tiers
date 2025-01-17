@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --error-color: #C62828;
+            --success-color: #388E3C;
+            --background-color: #1a1a2e;
+            --card-color: #242444;
+            --text-color: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-color);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+
+        .screen.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 40px;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        button {
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 10px 0;
+            border: 2px solid transparent;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            font-size: 1em;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        select option {
+            background: var(--card-color);
+            color: var(--text-color);
+            padding: 12px;
+            font-size: 1em;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .session-code {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+
+        #sessionCodeDisplay {
+            font-size: 2em;
+            letter-spacing: 3px;
+            color: var(--secondary-color);
+        }
+
+        .players-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .player-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        #answers {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        #answers li {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        #answers li:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        #answers li.correct {
+            background: var(--success-color);
+            color: white;
+        }
+
+        #answers li.incorrect {
+            background: var(--error-color);
+            color: white;
+        }
+
+        #answers li.disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            width: 0;
+            transition: width 0.3s ease;
+        }
+
+        #timer {
+            font-size: 2em;
+            text-align: center;
+            margin: 20px 0;
+            font-weight: 600;
+            color: var(--secondary-color);
+            transition: color 0.3s ease;
+        }
+
+        .question-counter {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .scoreboard {
+            margin-top: 20px;
+        }
+
+        .scoreboard-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .feedback {
+            text-align: center;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .feedback.correct {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .feedback.incorrect {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: var(--secondary-color);
+            color: white;
+            border-radius: 10px;
+            animation: slideIn 0.5s ease;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .reconnection-message {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .reconnection-box {
+            background: var(--card-color);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            animation: scaleIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            #answers {
+                grid-template-columns: 1fr;
+            }
+
+            .button-container {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            #timer {
+                font-size: 1.5em;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Écran d'accueil -->
+        <div id="homeScreen" class="screen active">
+    <h1>Trivia Game</h1>
+            <div class="button-container">
+                <button onclick="showCreateGame()">Créer une partie</button>
+                <button onclick="showJoinGame()">Rejoindre une partie</button>
+            </div>
+        </div>
+
+        <!-- Écran création de partie -->
+        <div id="createScreen" class="screen">
+            <h2>Créer une nouvelle partie</h2>
+            <input type="text" id="hostPseudo" placeholder="Votre pseudo" required />
+            <select id="numberOfQuestions">
+                <option value="5">5 questions</option>
+                <option value="10">10 questions</option>
+            </select>
+            <button onclick="createGame()">Créer la partie</button>
+    </div>
+
+        <!-- Écran rejoindre partie -->
+        <div id="joinScreen" class="screen">
+            <h2>Rejoindre une partie</h2>
+            <input type="text" id="joinSessionId" placeholder="Code de la session" required />
+            <input type="text" id="joinPseudo" placeholder="Votre pseudo" required />
+            <button onclick="joinGame()">Rejoindre</button>
+            <p id="joinError" style="color: red;"></p>
+    </div>
+
+        <!-- Salle d'attente -->
+        <div id="waitingRoom" class="screen">
+            <h2>Salle d'attente</h2>
+            <div class="session-code">
+                <p>Code de la session:</p>
+                <strong id="sessionCodeDisplay"></strong>
+            </div>
+            <div id="hostControls" style="display: none;">
+                <button id="startGameBtn" onclick="startGame()">Démarrer la partie</button>
+            </div>
+            <h3>Joueurs connectés:</h3>
+            <div id="playersList" class="players-list"></div>
+    </div>
+
+        <!-- Écran de jeu -->
+        <div id="gameScreen" class="screen">
+            <div class="question-counter" id="questionCounter"></div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <div id="timer"></div>
+        <h2 id="question"></h2>
+        <ul id="answers"></ul>
+            <div id="feedback"></div>
+            <div id="scoreboard" class="scoreboard"></div>
+        </div>
+
+        <!-- Écran de fin -->
+        <div id="endScreen" class="screen">
+            <h2>Partie terminée !</h2>
+            <div id="finalScores" class="scoreboard"></div>
+            <div class="button-container">
+                <button onclick="returnToHome()">Retour à l'accueil</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://localhost:3000');
+        let currentSessionId = '';
+        let isHost = false;
+        let currentQuestionIndex = 0;
+        let hasAnswered = false;
+        let totalQuestions = 0;
+        let reconnectionAttempts = 0;
+        const MAX_RECONNECTION_ATTEMPTS = 3;
+
+        // Fonctions de navigation
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function showCreateGame() {
+            showScreen('createScreen');
+        }
+
+        function showJoinGame() {
+            showScreen('joinScreen');
+        }
+
+        function returnToHome() {
+            // Réinitialiser tous les états
+            currentSessionId = '';
+            isHost = false;
+            currentQuestionIndex = 0;
+            hasAnswered = false;
+            totalQuestions = 0;
+
+            // Nettoyer les contenus
+            document.getElementById('hostPseudo').value = '';
+            document.getElementById('joinSessionId').value = '';
+            document.getElementById('joinPseudo').value = '';
+            document.getElementById('joinError').textContent = '';
+            document.getElementById('sessionCodeDisplay').textContent = '';
+            document.getElementById('playersList').innerHTML = '';
+            document.getElementById('answers').innerHTML = '';
+            document.getElementById('feedback').innerHTML = '';
+            document.getElementById('question').textContent = '';
+            document.getElementById('timer').textContent = '';
+            document.getElementById('scoreboard').innerHTML = '';
+            document.getElementById('finalScores').innerHTML = '';
+            
+            // Cacher les contrôles de l'hôte
+            document.getElementById('hostControls').style.display = 'none';
+
+            // Retourner à l'accueil
+            showScreen('homeScreen');
+        }
+
+        function validatePseudo(pseudo) {
+            // Vérifier la longueur du pseudo
+            if (pseudo.length < 2 || pseudo.length > 20) {
+                return 'Le pseudo doit contenir entre 2 et 20 caractères';
+            }
+            
+            // Vérifier les caractères autorisés (lettres, chiffres, tirets et underscores)
+            if (!/^[a-zA-Z0-9-_]+$/.test(pseudo)) {
+                return 'Le pseudo ne peut contenir que des lettres, chiffres, tirets et underscores';
+            }
+            
+            return null; // Pas d'erreur
+        }
+
+        // Création de partie
+        function createGame() {
+            const pseudo = document.getElementById('hostPseudo').value.trim();
+            const numberOfQuestions = parseInt(document.getElementById('numberOfQuestions').value);
+            
+            const error = validatePseudo(pseudo);
+            if (error) {
+                alert(error);
+                return;
+            }
+
+            socket.emit('createSession', { numberOfQuestions }, (response) => {
+                currentSessionId = response.sessionId;
+                isHost = true;
+                document.getElementById('sessionCodeDisplay').textContent = response.sessionId;
+                document.getElementById('hostControls').style.display = 'block';
+                
+                socket.emit('joinSession', { sessionId: response.sessionId, pseudo }, (joinResponse) => {
+                    if (joinResponse.success) {
+                        showScreen('waitingRoom');
+                    } else {
+                        alert(joinResponse.message);
+                    }
+                });
+            });
+        }
+
+        // Rejoindre une partie
+        function joinGame() {
+            const sessionId = document.getElementById('joinSessionId').value.trim();
+            const pseudo = document.getElementById('joinPseudo').value.trim();
+            
+            if (!sessionId) {
+                document.getElementById('joinError').textContent = 'Veuillez entrer un code de session';
+                return;
+            }
+
+            const error = validatePseudo(pseudo);
+            if (error) {
+                document.getElementById('joinError').textContent = error;
+                return;
+            }
+
+            socket.emit('joinSession', { sessionId, pseudo }, (response) => {
+                if (response.success) {
+                    currentSessionId = sessionId;
+                    document.getElementById('sessionCodeDisplay').textContent = sessionId;
+                    showScreen('waitingRoom');
+                } else {
+                    document.getElementById('joinError').textContent = response.message;
+                }
+            });
+        }
+
+        // Démarrer la partie
+        function startGame() {
+            const startBtn = document.getElementById('startGameBtn');
+            startBtn.disabled = true;
+            startBtn.textContent = 'Démarrage...';
+            
+            socket.emit('startGame', { sessionId: currentSessionId }, (response) => {
+                if (!response.success) {
+                    alert(response.message);
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Démarrer la partie';
+                }
+            });
+        }
+
+        // Gestion du démarrage de la partie
+        socket.on('gameStarting', (data) => {
+            showNotification(data.message);
+            // Désactiver les contrôles de l'hôte
+            document.getElementById('hostControls').style.display = 'none';
+            // Préparer l'écran de jeu
+            document.getElementById('answers').innerHTML = '';
+            document.getElementById('feedback').innerHTML = '';
+            document.getElementById('scoreboard').innerHTML = '';
+            document.getElementById('timer').textContent = '';
+            document.getElementById('question').textContent = 'Préparation de la partie...';
+            showScreen('gameScreen');
+        });
+
+        // Mise à jour de la liste des joueurs
+        socket.on('playerJoined', (data) => {
+            const playersList = document.getElementById('playersList');
+            playersList.innerHTML = '';
+            data.players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'player-card';
+                playerCard.textContent = player.pseudo;
+                playersList.appendChild(playerCard);
+            });
+            updateScoreboard(data.scores);
+        });
+
+        // Mise à jour du scoreboard
+        function updateScoreboard(scores) {
+            const scoreboard = document.getElementById('scoreboard');
+            scoreboard.innerHTML = '<h3>Scores:</h3>';
+            
+            Object.entries(scores)
+                .sort(([,a], [,b]) => b - a)
+                .forEach(([pseudo, score]) => {
+                    const scoreItem = document.createElement('div');
+                    scoreItem.className = 'scoreboard-item';
+                    scoreItem.innerHTML = `
+                        <span>${pseudo}</span>
+                        <span>${score} points</span>
+                    `;
+                    scoreboard.appendChild(scoreItem);
+                });
+        }
+
+        // Gestion des questions
+        socket.on('newQuestion', (data) => {
+            console.log('Nouvelle question reçue:', data);
+            showScreen('gameScreen');
+            const { question, questionIndex, totalQuestions: total } = data;
+            currentQuestionIndex = questionIndex;
+            totalQuestions = total;
+            
+            // Réinitialiser l'état des réponses
+            hasAnswered = false;
+            document.querySelectorAll('#answers li').forEach(answer => {
+                answer.classList.remove('disabled', 'correct', 'incorrect');
+                answer.style.pointerEvents = 'auto';
+            });
+
+            // Mise à jour du compteur de questions
+            document.getElementById('questionCounter').textContent = 
+                `Question ${questionIndex + 1} sur ${total}`;
+
+            // Mise à jour de la barre de progression
+            const progress = ((questionIndex + 1) / total) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+
+            // Réinitialiser le timer à 10 avant d'afficher la nouvelle question
+            document.getElementById('timer').innerText = '10';
+            document.getElementById('timer').style.color = '#2196F3';
+
+            document.getElementById('question').innerText = question.question;
+            const answersList = document.getElementById('answers');
+            answersList.innerHTML = '';
+            
+            ['reponse1', 'reponse2', 'reponse3', 'reponse4'].forEach((key, index) => {
+                const li = document.createElement('li');
+                li.textContent = question[key];
+                li.addEventListener('click', () => {
+                    if (!hasAnswered) {
+                        submitAnswer(index);
+                    }
+                }, { once: true }); // Garantir qu'on ne peut cliquer qu'une seule fois
+                answersList.appendChild(li);
+            });
+
+            document.getElementById('feedback').innerHTML = '';
+        });
+
+        // Mise à jour du timer
+        socket.on('timerUpdate', (data) => {
+            const { timeLeft } = data;
+            if (timeLeft >= 0) { // Ajouter une vérification
+                document.getElementById('timer').innerText = timeLeft;
+                
+                if (timeLeft <= 3) {
+                    document.getElementById('timer').style.color = '#C62828';
+                } else {
+                    document.getElementById('timer').style.color = '#2196F3';
+                }
+            }
+        });
+
+        // Mise à jour des scores
+        socket.on('scoreUpdate', (data) => {
+            updateScoreboard(data.scores);
+        });
+
+        function submitAnswer(answerIndex) {
+            if (hasAnswered) {
+                console.log('Réponse déjà soumise');
+                return;
+            }
+
+            // Désactiver immédiatement les réponses
+            hasAnswered = true;
+            const answers = document.querySelectorAll('#answers li');
+            answers.forEach(answer => {
+                answer.classList.add('disabled');
+                answer.style.pointerEvents = 'none'; // Empêcher les clics
+            });
+
+            const pseudo = isHost ? document.getElementById('hostPseudo').value : document.getElementById('joinPseudo').value;
+            
+            socket.emit('submitAnswer', {
+                sessionId: currentSessionId,
+                questionIndex: currentQuestionIndex,
+                answerIndex,
+                pseudo
+            }, (response) => {
+                if (response.success) {
+                    // Afficher la bonne réponse
+                    answers.forEach((answer, index) => {
+                        if (index === response.correctAnswer) {
+                            answer.classList.add('correct');
+                        } else if (index === answerIndex && !response.isCorrect) {
+                            answer.classList.add('incorrect');
+                        }
+                    });
+
+                    // Afficher le feedback
+                    const feedback = document.getElementById('feedback');
+                    feedback.className = `feedback ${response.isCorrect ? 'correct' : 'incorrect'}`;
+                    feedback.innerText = response.isCorrect 
+                        ? `Bonne réponse ! +${response.points} points`
+                        : `Mauvaise réponse ! La bonne réponse était : ${response.correctAnswerText}`;
+                } else {
+                    // Gérer l'erreur
+                    const feedback = document.getElementById('feedback');
+                    feedback.className = 'feedback incorrect';
+                    feedback.innerText = response.message;
+                }
+            });
+        }
+
+        socket.on('gameEnded', (data) => {
+            const { scores, players } = data;
+            showScreen('endScreen');
+            
+            const finalScores = document.getElementById('finalScores');
+            finalScores.innerHTML = '<h3>Classement final:</h3>';
+            
+            Object.entries(scores)
+                .sort(([,a], [,b]) => b - a)
+                .forEach(([pseudo, score], index) => {
+                    const scoreItem = document.createElement('div');
+                    scoreItem.className = 'scoreboard-item';
+                    scoreItem.innerHTML = `
+                        <span>${index + 1}. ${pseudo}</span>
+                        <span>${score} points</span>
+                    `;
+                    finalScores.appendChild(scoreItem);
+                });
+        });
+
+        // Gestion de la déconnexion
+        socket.on('disconnect', () => {
+            console.log('Déconnecté du serveur');
+            showReconnectionMessage();
+        });
+
+        function showReconnectionMessage() {
+            const message = document.createElement('div');
+            message.className = 'reconnection-message';
+            message.innerHTML = `
+                <div class="reconnection-box">
+                    <h3>Connexion perdue</h3>
+                    <p>Tentative de reconnexion...</p>
+                </div>
+            `;
+            document.body.appendChild(message);
+        }
+
+        // Gestion de la reconnexion
+        socket.on('connect', () => {
+            console.log('Connecté au serveur');
+            
+            if (currentSessionId) {
+                const pseudo = isHost ? document.getElementById('hostPseudo').value : document.getElementById('joinPseudo').value;
+                
+                socket.emit('rejoinSession', { sessionId: currentSessionId, pseudo }, (response) => {
+                    if (response.success) {
+                        // Supprimer le message de reconnexion
+                        const message = document.querySelector('.reconnection-message');
+                        if (message) message.remove();
+
+                        // Restaurer l'état du jeu
+                        if (response.gameState) {
+                            restoreGameState(response.gameState);
+                        }
+                        
+                        showNotification('Reconnecté avec succès !');
+                        reconnectionAttempts = 0;
+                    } else {
+                        if (reconnectionAttempts < MAX_RECONNECTION_ATTEMPTS) {
+                            reconnectionAttempts++;
+                            setTimeout(() => socket.connect(), 1000);
+                        } else {
+                            alert('Impossible de rejoindre la partie. Retour à l\'accueil.');
+                            returnToHome();
+                        }
+                    }
+                });
+            }
+        });
+
+        function restoreGameState(gameState) {
+            currentQuestionIndex = gameState.questionIndex;
+            totalQuestions = gameState.totalQuestions;
+            
+            showScreen('gameScreen');
+            
+            // Restaurer la question en cours
+            document.getElementById('questionCounter').textContent = 
+                `Question ${gameState.questionIndex + 1} sur ${gameState.totalQuestions}`;
+            
+            const progress = ((gameState.questionIndex + 1) / gameState.totalQuestions) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            
+            document.getElementById('question').innerText = gameState.currentQuestion.question;
+            document.getElementById('timer').innerText = gameState.timeLeft;
+            
+            // Restaurer les réponses
+            const answersList = document.getElementById('answers');
+            answersList.innerHTML = '';
+            ['reponse1', 'reponse2', 'reponse3', 'reponse4'].forEach((key, index) => {
+                const li = document.createElement('li');
+                li.textContent = gameState.currentQuestion[key];
+                li.addEventListener('click', () => {
+                    if (!hasAnswered) {
+                        submitAnswer(index);
+                    }
+                });
+                answersList.appendChild(li);
+            });
+            
+            updateScoreboard(gameState.scores);
+        }
+
+        // Écouter les événements de déconnexion/reconnexion des autres joueurs
+        socket.on('playerDisconnected', (data) => {
+            showNotification(`${data.pseudo} s'est déconnecté`);
+            if (data.remainingPlayers === 0) {
+                showNotification('Tous les joueurs sont déconnectés. La partie va se terminer.');
+            }
+        });
+
+        socket.on('playerReconnected', (data) => {
+            showNotification(`${data.pseudo} s'est reconnecté`);
+            updateScoreboard(data.scores);
+        });
+
+        socket.on('playerLeft', (data) => {
+            showNotification(`${data.pseudo} a quitté la partie`);
+            updateScoreboard(data.scores);
+        });
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.5s ease-in';
+                setTimeout(() => notification.remove(), 500);
+            }, 3000);
+        }
+
+        // Ajouter des écouteurs d'événements pour valider en temps réel
+        document.getElementById('hostPseudo').addEventListener('input', function() {
+            const error = validatePseudo(this.value.trim());
+            this.style.borderColor = error ? '#C62828' : '#ddd';
+            this.title = error || '';
+        });
+
+        document.getElementById('joinPseudo').addEventListener('input', function() {
+            const error = validatePseudo(this.value.trim());
+            this.style.borderColor = error ? '#C62828' : '#ddd';
+            document.getElementById('joinError').textContent = error || '';
+        });
+    </script>
+</body>
+</html>
