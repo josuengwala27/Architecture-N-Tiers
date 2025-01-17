@@ -1,4 +1,5 @@
 # Trivia Game
+# Membres du groupe : Jean Josue NGWALA MAYALA & Anis Hamnich
 
 Un jeu de quiz multijoueur en temps réel développé avec Node.js, Socket.IO et SQLite.
 
